@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breathe</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0d;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Lato', sans-serif;
+    color: #fff;
+    user-select: none;
+  }
+
+  .label {
+    font-size: 1rem;
+    font-weight: 300;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 52px;
+    height: 1.2em;
+    transition: opacity 0.6s ease;
+  }
+
+  .ring-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 260px;
+    height: 260px;
+  }
+
+  /* outer glow ring — scales with button */
+  .glow-ring {
+    position: absolute;
+    inset: -24px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(200,30,30,0.18) 0%, transparent 70%);
+    transform: scale(0.7);
+    opacity: 0;
+    transition: transform 6s cubic-bezier(0.4,0,0.2,1),
+                opacity 1s ease;
+    pointer-events: none;
+  }
+
+  .btn {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    outline: none;
+    background: radial-gradient(circle at 35% 35%, #e84040, #9b1414);
+    box-shadow:
+      0 0 0 0px rgba(200,40,40,0.35),
+      0 8px 40px rgba(0,0,0,0.7);
+    transform: scale(0.82);
+    transition:
+      transform 6s cubic-bezier(0.4,0,0.2,1),
+      box-shadow 6s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* idle: subtle pulse */
+  @keyframes idle-pulse {
+    0%, 100% { box-shadow: 0 0 0 0px rgba(200,40,40,0.3), 0 8px 40px rgba(0,0,0,0.7); }
+    50%       { box-shadow: 0 0 0 10px rgba(200,40,40,0.1), 0 8px 40px rgba(0,0,0,0.7); }
+  }
+
+  .btn.idle {
+    animation: idle-pulse 3s ease-in-out infinite;
+  }
+
+  /* inhale */
+  .btn.inhale {
+    transform: scale(1.28);
+    box-shadow:
+      0 0 0 18px rgba(200,40,40,0.12),
+      0 16px 60px rgba(0,0,0,0.5);
+    animation: none;
+  }
+  .glow-ring.inhale {
+    transform: scale(1.28);
+    opacity: 1;
+  }
+
+  /* hold */
+  .btn.hold {
+    transform: scale(1.28);
+    box-shadow:
+      0 0 0 18px rgba(200,40,40,0.12),
+      0 16px 60px rgba(0,0,0,0.5);
+    animation: none;
+  }
+  .glow-ring.hold {
+    transform: scale(1.28);
+    opacity: 1;
+  }
+
+  /* exhale */
+  .btn.exhale {
+    transform: scale(0.82);
+    box-shadow:
+      0 0 0 0px rgba(200,40,40,0.0),
+      0 8px 40px rgba(0,0,0,0.7);
+    animation: none;
+  }
+  .glow-ring.exhale {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+
+  /* back to idle after exhale */
+  .btn.back-idle {
+    animation: idle-pulse 3s ease-in-out infinite;
+  }
+
+  .btn-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    pointer-events: none;
+  }
+
+  .hint {
+    margin-top: 48px;
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.2);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="label" id="label">Tap to begin</div>
+
+<div class="ring-wrap">
+  <div class="glow-ring" id="glowRing"></div>
+  <button class="btn idle" id="btn" aria-label="Breathing guide button">
+    <span class="btn-text" id="btnText">Breathe</span>
+  </button>
+</div>
+
+<div class="hint" id="hint">follow the button</div>
+
+<script>
+  const btn      = document.getElementById('btn');
+  const glowRing = document.getElementById('glowRing');
+  const label    = document.getElementById('label');
+  const hint     = document.getElementById('hint');
+  const btnText  = document.getElementById('btnText');
+
+  let phase = 'idle'; // idle | inhale | hold | exhale
+  let timer = null;
+
+  const INHALE  = 5000; // slightly slower inflate
+  const HOLD    = 4000;
+  const EXHALE  = 6000; // slower deflate too
+
+  const phases = {
+    inhale: { label: 'Breathe in',  btn: 'In',   duration: INHALE,  next: 'hold'   },
+    hold:   { label: 'Hold',        btn: 'Hold', duration: HOLD,    next: 'exhale' },
+    exhale: { label: 'Breathe out', btn: 'Out',  duration: EXHALE,  next: 'inhale' },
+  };
+
+  function setClasses(el, remove, add) {
+    remove.forEach(c => el.classList.remove(c));
+    if (add) el.classList.add(add);
+  }
+
+  function runPhase(name) {
+    phase = name;
+    const p = phases[name];
+
+    label.textContent = p.label;
+    btnText.textContent = p.btn;
+    hint.style.opacity = '0';
+
+    // apply transition class to both button and glow
+    setClasses(btn, ['idle','inhale','hold','exhale','back-idle'], name);
+    setClasses(glowRing, ['inhale','hold','exhale'], name);
+
+    timer = setTimeout(() => runPhase(p.next), p.duration);
+  }
+
+  function start() {
+    if (phase !== 'idle') return;
+    clearTimeout(timer);
+    runPhase('inhale');
+  }
+
+  // After exhale finishes and we loop back to inhale, we also update transition timing
+  // Override transition for exhale (longer)
+  const observer = new MutationObserver(() => {
+    if (btn.classList.contains('exhale')) {
+      btn.style.transition = `transform ${EXHALE/1000}s cubic-bezier(0.4,0,0.2,1), box-shadow ${EXHALE/1000}s cubic-bezier(0.4,0,0.2,1)`;
+      glowRing.style.transition = `transform ${EXHALE/1000}s cubic-bezier(0.4,0,0.2,1), opacity ${EXHALE/1000}s ease`;
+    } else if (btn.classList.contains('inhale')) {
+      btn.style.transition = `transform ${INHALE/1000}s cubic-bezier(0.4,0,0.2,1), box-shadow ${INHALE/1000}s cubic-bezier(0.4,0,0.2,1)`;
+      glowRing.style.transition = `transform ${INHALE/1000}s cubic-bezier(0.4,0,0.2,1), opacity 1s ease`;
+    } else {
+      btn.style.transition = '';
+      glowRing.style.transition = '';
+    }
+  });
+  observer.observe(btn, { attributes: true, attributeFilter: ['class'] });
+
+  btn.addEventListener('click', start);
+  btn.addEventListener('touchstart', e => { e.preventDefault(); start(); }, { passive: false });
+</script>
+</body>
+</html>
