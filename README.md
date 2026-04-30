@@ -1,2 +1,2 @@
-# Wellness-App-0.2
+# Wellness-App
 This is the app I chose for Hardcore Entrepreneur 6.0
